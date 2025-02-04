@@ -1,22 +1,53 @@
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+import json
 import streamlit as st
-import matplotlib.pyplot as plt
 
-st.title("📊 Student Dashboard")
+load_dotenv()
 
-level = st.session_state.get("level", 1)
-score = st.session_state.get("score", 0)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-st.write(f"🎯 Current Mastery Level: {level}")
-st.write(f"🔥 Total Score: {score}")
 
-# Progress visualization
-categories = ["Knowledge", "Application", "Reasoning"]
-scores = [min(level * 20, 100) for _ in categories]
+def initialize_session_state():
+    """Initialize session state variables"""
+    if "level" not in st.session_state:
+        st.session_state.level = 1
+    if "score" not in st.session_state:
+        st.session_state.score = 0
+    if "questions" not in st.session_state:
+        st.session_state.questions = None
+    if "current_index" not in st.session_state:
+        st.session_state.current_index = 0
+    if "topic" not in st.session_state:
+        st.session_state.topic = None
 
-plt.bar(categories, scores, color=['blue', 'green', 'red'])
-plt.xlabel("Skill Areas")
-plt.ylabel("Proficiency (%)")
-st.pyplot(plt)
-
-if st.button("Go Back"):
-    st.switch_page("app.py")
+def generate_quiz(topic, level, api_key):
+    """Generate quiz questions using OpenAI API"""
+    question_types = {
+        1: "MCQ (Single Correct), True/False",
+        2: "MCQ (Single/Multiple Correct), Matching",
+        3: "Passage-Based, Multiple Response, Matching (Complex), Sequence Ordering"
+    }
+    
+    prompt = f"""
+        Generate {level}-level quiz questions for {topic}.
+        Question types should be: {question_types[level]}.
+        Ensure at least 8 questions for Level 1 & 2, and 6 for Level 3.
+        Format output as JSON:
+        [
+          {{"question": "What is 2+2?", "options": ["2", "3", "4", "5"], "answer": "4", "type": "MCQ (Single Correct)"}},
+          {{"question": "...", "options": ["..."], "answer": "...", "type": "..."}}
+        ]
+    """
+    
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": prompt}]
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        st.error(f"Error generating quiz: {e}")
+        return []
